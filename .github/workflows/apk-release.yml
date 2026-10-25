@@ -34,9 +34,6 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
@@ -46,8 +43,11 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Release APKs
+        env:
+          PULL_REQUEST: 'false'
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
-          ./gradlew assembleGmsMobileUniversalRelease assembleFossMobileUniversalRelease assembleGmsMobileArm64Release --no-daemon --stacktrace
+          ./gradlew assembleGmsMobileUniversalRelease assembleFossMobileUniversalRelease --no-daemon --stacktrace
 
       - name: Collect and Rename Release APKs
         id: collect_apks
@@ -86,7 +86,7 @@ jobs:
       - name: Upload APKs as Workflow Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: YumaPlayer-APKs-${{ steps.resolve_tag.outputs.tag }}
+          name: YumaPlayer-APKs
           path: release_artifacts/*
 
       - name: Publish to GitHub Releases
