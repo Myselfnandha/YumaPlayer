@@ -29,10 +29,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import kotlinx.coroutines.launch
+import moe.rukamori.archivetune.audiodsp.MixPreferences
+import moe.rukamori.archivetune.data.repository.MixPreferencesRepositoryImpl
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -87,6 +91,9 @@ import moe.rukamori.archivetune.viewmodels.SponsorBlockSettingsViewModel
 @Composable
 fun PlayerSettings(navController: NavController) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val mixRepo = remember(context) { MixPreferencesRepositoryImpl(context.applicationContext) }
+    val mixPreferences by mixRepo.mixPreferences.collectAsStateWithLifecycle(initialValue = MixPreferences())
 
     val (playbackSource, onPlaybackSourceChange) = rememberEnumPreference(
         PlaybackSourceKey,
@@ -394,6 +401,12 @@ internal fun PlayerSettingsScreen(
         PlayerSettingsContent(
             state = state,
             actions = actions,
+            mixPreferences = mixPreferences,
+            onMixPreferencesChange = { updatedPrefs ->
+                coroutineScope.launch {
+                    mixRepo.updatePreferences { updatedPrefs }
+                }
+            },
             sponsorBlockState = sponsorBlockState,
             onSponsorBlockEnabledChange = onSponsorBlockEnabledChange,
             onCategorySheetOpen = onCategorySheetOpen,

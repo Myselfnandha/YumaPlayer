@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import moe.rukamori.archivetune.R
+import moe.rukamori.archivetune.audiodsp.MixPreferences
 import moe.rukamori.archivetune.ui.component.PreferenceGroup
 import moe.rukamori.archivetune.ui.component.SwitchPreference
 import moe.rukamori.archivetune.ui.screens.settings.playerAwareBottomPadding
@@ -92,6 +93,8 @@ internal fun PlayerSettingsContent(
     state: PlayerSettingsUiState,
     actions: PlayerSettingsUiActions,
     modifier: Modifier = Modifier,
+    mixPreferences: MixPreferences = MixPreferences(),
+    onMixPreferencesChange: (MixPreferences) -> Unit = {},
     sponsorBlockState: SponsorBlockSettingsScreenState = SponsorBlockSettingsScreenState.Loading,
     onSponsorBlockEnabledChange: (Boolean) -> Unit = {},
     onCategorySheetOpen: () -> Unit = {},
@@ -110,6 +113,10 @@ internal fun PlayerSettingsContent(
         PlayerLosslessSection(state = state, actions = actions)
         PlayerAudioSection(state = state, actions = actions)
         PlayerCrossfadeSection(state = state, actions = actions)
+        MixSettingsSection(
+            preferences = mixPreferences,
+            onPreferencesChange = onMixPreferencesChange,
+        )
         PlayerSponsorBlockSection(
             state = sponsorBlockState,
             onEnabledChange = onSponsorBlockEnabledChange,
