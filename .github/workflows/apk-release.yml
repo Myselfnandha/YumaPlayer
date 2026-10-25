@@ -17,9 +17,13 @@ permissions:
   actions: read
 
 jobs:
-  build-and-release:
-    name: Build & Release Android APKs
+  build-apks:
+    name: Build APK (${{ matrix.flavor }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor: [gms, foss]
 
     steps:
       - name: Checkout Repository
@@ -34,37 +38,76 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Set up Gradle
+      - name: Set up ccache for Native C++
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-ccache-${{ matrix.flavor }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-ccache-${{ matrix.flavor }}-
+            ${{ runner.os }}-ccache-
+
+      - name: Set up Gradle Cache
         uses: gradle/actions/setup-gradle@v4
         with:
           cache-cleanup: on-success
+          cache-read-only: false
 
       - name: Grant Execute Permission to Gradle Wrapper
         run: chmod +x gradlew
 
-      - name: Build Release APKs
+      - name: Build Release APK (${{ matrix.flavor }})
         env:
           PULL_REQUEST: 'false'
           GITHUB_EVENT_NAME: ${{ github.event_name }}
+          CMAKE_C_COMPILER_LAUNCHER: ccache
+          CMAKE_CXX_COMPILER_LAUNCHER: ccache
         run: |
-          ./gradlew assembleGmsMobileUniversalRelease assembleFossMobileUniversalRelease --no-daemon --stacktrace
+          FLAVOR_CAP="$(tr '[:lower:]' '[:upper:]' <<< ${matrix.flavor:0:1})${matrix.flavor:1}"
+          ./gradlew "assemble${FLAVOR_CAP}MobileUniversalRelease" \
+            --build-cache \
+            --parallel \
+            -Dorg.gradle.parallel=true \
+            -Dorg.gradle.caching=true \
+            -Dorg.gradle.workers.max=4 \
+            --stacktrace
 
-      - name: Collect and Rename Release APKs
-        id: collect_apks
+      - name: Collect Release APK
         run: |
           mkdir -p release_artifacts
-          
-          # Find and copy all built release APKs
-          find app/build/outputs/apk -type f -name "*.apk" | while read -r apk; do
+          find app/build/outputs/apk -type f -name "*release*.apk" | while read -r apk; do
             filename=$(basename "$apk")
-            echo "Found APK: $apk ($filename)"
+            echo "Found APK: $apk -> $filename"
             cp "$apk" "release_artifacts/$filename"
           done
-
           ls -lh release_artifacts/
 
-          # Generate SHA256 Checksums
+      - name: Upload Flavor Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: YumaPlayer-APK-${{ matrix.flavor }}
+          path: release_artifacts/*
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: build-apks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download All Built APKs
+        uses: actions/download-artifact@v4
+        with:
+          path: release_artifacts
+          pattern: YumaPlayer-APK-*
+          merge-multiple: true
+
+      - name: Generate Checksums
+        id: checksums
+        run: |
           cd release_artifacts
+          ls -lh
           sha256sum *.apk > checksums.sha256 || true
           cat checksums.sha256
           cd ..
@@ -82,12 +125,6 @@ jobs:
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "Resolved Tag: $TAG"
-
-      - name: Upload APKs as Workflow Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: YumaPlayer-APKs
-          path: release_artifacts/*
 
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
