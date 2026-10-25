@@ -320,6 +320,12 @@ fun PlayerSettings(navController: NavController) {
     PlayerSettingsScreen(
         state = state,
         actions = actions,
+        mixPreferences = mixPreferences,
+        onMixPreferencesChange = { updatedPrefs ->
+            coroutineScope.launch {
+                mixRepo.updatePreferences { updatedPrefs }
+            }
+        },
         sponsorBlockState = sponsorBlockState,
         onSponsorBlockEnabledChange = onSponsorBlockEnabledChange,
         onCategorySheetOpen = onSponsorBlockCategorySheetOpen,
@@ -368,6 +374,8 @@ private fun SponsorBlockApiUrlDialog(
 internal fun PlayerSettingsScreen(
     state: PlayerSettingsUiState,
     actions: PlayerSettingsUiActions,
+    mixPreferences: MixPreferences = MixPreferences(),
+    onMixPreferencesChange: (MixPreferences) -> Unit = {},
     sponsorBlockState: SponsorBlockSettingsScreenState = SponsorBlockSettingsScreenState.Loading,
     onSponsorBlockEnabledChange: (Boolean) -> Unit = {},
     onCategorySheetOpen: () -> Unit = {},
@@ -402,11 +410,7 @@ internal fun PlayerSettingsScreen(
             state = state,
             actions = actions,
             mixPreferences = mixPreferences,
-            onMixPreferencesChange = { updatedPrefs ->
-                coroutineScope.launch {
-                    mixRepo.updatePreferences { updatedPrefs }
-                }
-            },
+            onMixPreferencesChange = onMixPreferencesChange,
             sponsorBlockState = sponsorBlockState,
             onSponsorBlockEnabledChange = onSponsorBlockEnabledChange,
             onCategorySheetOpen = onCategorySheetOpen,
