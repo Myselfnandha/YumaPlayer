@@ -1,0 +1,124 @@
+name: Build & Release APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Release Tag (e.g. v1.0.0-automix)'
+        required: false
+        default: 'v1.0.0-automix'
+        type: string
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build-and-release:
+    name: Build & Release Android APKs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-cleanup: on-success
+
+      - name: Grant Execute Permission to Gradle Wrapper
+        run: chmod +x gradlew
+
+      - name: Build Release APKs
+        run: |
+          ./gradlew assembleGmsMobileUniversalRelease assembleFossMobileUniversalRelease assembleGmsMobileArm64Release --no-daemon --stacktrace
+
+      - name: Collect and Rename Release APKs
+        id: collect_apks
+        run: |
+          mkdir -p release_artifacts
+          
+          # Find and copy all built release APKs
+          find app/build/outputs/apk -type f -name "*.apk" | while read -r apk; do
+            filename=$(basename "$apk")
+            echo "Found APK: $apk ($filename)"
+            cp "$apk" "release_artifacts/$filename"
+          done
+
+          ls -lh release_artifacts/
+
+          # Generate SHA256 Checksums
+          cd release_artifacts
+          sha256sum *.apk > checksums.sha256 || true
+          cat checksums.sha256
+          cd ..
+
+      - name: Determine Release Tag
+        id: resolve_tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag_name }}"
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="v1.0.0-automix"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved Tag: $TAG"
+
+      - name: Upload APKs as Workflow Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: YumaPlayer-APKs-${{ steps.resolve_tag.outputs.tag }}
+          path: release_artifacts/*
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.resolve_tag.outputs.tag }}
+          name: "YumaPlayer ${{ steps.resolve_tag.outputs.tag }}"
+          body: |
+            ## YumaPlayer Autonomous Mixing Release (${{ steps.resolve_tag.outputs.tag }})
+
+            ### 🚀 New Features & Enhancements
+            - **Seamless AutoMix Engine**:
+              - Dual-deck real-time transition automation powered by `DjFilterAudioProcessor`.
+              - 200 Hz crossover low-shelf bass-swap filters preventing muddy low-end build-up.
+              - Bar-snapped phrase boundary synchronization and dynamic Sonic tempo stretching.
+            - **Musical Compatibility Engine**:
+              - 6-factor weighted compatibility evaluation: BPM (25%), Phrase (20%), Instrument (20%), Harmonic Key (15%), Energy (10%), Vocal Clash (10%).
+              - Circle-of-Fifths Camelot Wheel harmonic scoring (relative majors/minors, adjacent steps, energy boost transpositions).
+            - **AI Stem Mashup Architecture**:
+              - 4-stem separation support (Vocals, Drums, Bass, Accompaniment) with background LRU disk caching.
+              - Common PCM Rendering Path with soft-knee peak limiting to eliminate inter-player clock drift.
+              - Mashup Combinations: Vocal over Instrumental, Drum & Bass handoffs, and multi-track layer blending.
+            - **Mix Preferences & Settings UI**:
+              - Persistent user preferences via AndroidX DataStore.
+              - Modern Jetpack Compose controls for mixing engine, mix style, harmonic matching, vocal clash guard, and resource constraints.
+
+            ### 📦 Checksums & Integrity
+            Verify downloaded APKs using the attached `checksums.sha256`.
+          files: |
+            release_artifacts/*.apk
+            release_artifacts/checksums.sha256
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
