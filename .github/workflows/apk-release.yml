@@ -23,7 +23,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        flavor: [gms, foss]
+        include:
+          - flavor: gms
+            task: assembleGmsMobileUniversalRelease
+          - flavor: foss
+            task: assembleFossMobileUniversalRelease
 
     steps:
       - name: Checkout Repository
@@ -62,8 +66,7 @@ jobs:
           CMAKE_C_COMPILER_LAUNCHER: ccache
           CMAKE_CXX_COMPILER_LAUNCHER: ccache
         run: |
-          FLAVOR_CAP="$(tr '[:lower:]' '[:upper:]' <<< ${matrix.flavor:0:1})${matrix.flavor:1}"
-          ./gradlew "assemble${FLAVOR_CAP}MobileUniversalRelease" \
+          ./gradlew "${{ matrix.task }}" \
             --build-cache \
             --parallel \
             -Dorg.gradle.parallel=true \
